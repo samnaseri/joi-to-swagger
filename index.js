@@ -337,6 +337,13 @@ const parseAsType = {
 
 		return swagger;
 	},
+	link: (schema) => {
+		const ref = get(schema, '$_terms.link[0].ref.key');
+		if (!ref) {
+			throw new Error('Link schema is missing a ref');
+		}
+		return ({ $ref: `#/components/schemas/${ref}` });
+	},
 };
 
 function parse (schema, existingComponents, isSchemaOverride) {
@@ -359,8 +366,9 @@ function parse (schema, existingComponents, isSchemaOverride) {
 	}
 
 	const components = {};
-	const metaDefName = flattenMeta.className;
+	const metaDefName = flattenMeta.className || get(schema, '_flags.id');
 	const metaDefType = flattenMeta.classTarget || 'schemas';
+
 	const getReturnValue = (swagger) => {
 		if (metaDefName) {
 			set(components, [ metaDefType, metaDefName ], swagger);

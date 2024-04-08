@@ -1193,6 +1193,136 @@ suite('swagger converts', (s) => {
 		},
 	);
 
+	// link test
+	simpleTest(
+		'link to a component',
+		joi.link('myComponent'),
+		{
+			$ref: '#/components/schemas/myComponent',
+		},
+	);
+
+	// id test
+	simpleTest(
+		'id adds the component to the components',
+		joi.object({}).id('myComponent'),
+		{
+			'$ref': '#/components/schemas/myComponent',
+		},
+		{
+			schemas: {
+				myComponent: {
+					type: 'object',
+					properties: {},
+					additionalProperties: false,
+				},
+			},
+		},
+	);
+
+	// full id and link test
+	s.test('full id and link test', (t) => {
+		const schema = joi.object({
+			name: joi.string().required(),
+			children: joi.array().items(joi.link('person')).required(),
+		}).id('person').meta({ className: 'person' });
+		const expectedResultSchema = {
+			'$ref': '#/components/schemas/person',
+		};
+		const expectedSchemaComponents = {
+			schemas: {
+				person: {
+					type: 'object',
+					required: [ 'name', 'children' ],
+					properties: {
+						name: { type: 'string' },
+						children: {
+							type: 'array',
+							items: { '$ref': '#/components/schemas/person' },
+						},
+					},
+					additionalProperties: false,
+				},
+			},
+		};
+
+		const existingComponents = {};
+		const result = parser(schema, existingComponents);
+		t.same(result.swagger, expectedResultSchema, 'swagger matches');
+		t.same(result.components, expectedSchemaComponents, 'components match');
+		t.end();
+	});
+
+	// id and link works deep inside an schema
+	s.only('id and link works deep inside an schema', (t) => {
+		const teacherSchema = joi.object({
+			name: joi.string().required(),
+			students: joi.array().items(joi.link('student')).optional(),
+		}).id('teacher');
+		const studentSchema = joi.object({
+			name: joi.string().required(),
+			teacher: joi.link('teacher').optional(),
+		}).id('student');
+		const schoolSchema = joi.object({
+			name: joi.string().required(),
+			teachers: joi.array().items(joi.link('teacher')).optional(),
+			students: joi.array().items(joi.link('student')).optional(),
+		}).id('school');
+		const expectedResultSchema = {
+			'$ref': '#/components/schemas/school',
+		};
+		const expectedSchemaComponents = {
+			schemas: {
+				teacher: {
+					type: 'object',
+					required: [ 'name' ],
+					properties: {
+						name: { type: 'string' },
+						students: {
+							type: 'array',
+							items: { '$ref': '#/components/schemas/student' },
+						},
+					},
+					additionalProperties: false,
+				},
+				student: {
+					type: 'object',
+					required: [ 'name' ],
+					properties: {
+						name: { type: 'string' },
+						teacher: { '$ref': '#/components/schemas/teacher' },
+					},
+					additionalProperties: false,
+				},
+				school: {
+					type: 'object',
+					required: [ 'name' ],
+					properties: {
+						name: { type: 'string' },
+						teachers: {
+							type: 'array',
+							items: { '$ref': '#/components/schemas/teacher' },
+						},
+						students: {
+							type: 'array',
+							items: { '$ref': '#/components/schemas/student' },
+						},
+					},
+					additionalProperties: false,
+				},
+			},
+		};
+		const parseSchoolSchemaResult = parser(schoolSchema, {});
+		let components = { schemas: { ...components.schemas, ...parseSchoolSchemaResult.components.schemas } };
+		const parseTeacherSchemaResult = parser(teacherSchema, components);
+		components = { schemas: { ...components.schemas, ...parseTeacherSchemaResult.components.schemas } };
+		const parseStudentSchemaResult = parser(studentSchema, components);
+		components = { schemas: { ...components.schemas, ...parseStudentSchemaResult.components.schemas } };
+		t.same(parseSchoolSchemaResult.swagger, expectedResultSchema, 'swagger matches');
+		t.same(components, expectedSchemaComponents, 'components match');
+		t.end();
+	});
+
 	testError('missing schema', undefined, new Error('No schema was passed.'));
 
 	testError('no joi schema', 5, new TypeError('Passed schema does not appear to be a joi schema.'));
