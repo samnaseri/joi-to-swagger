@@ -69,7 +69,7 @@ function parseWhens (schema, existingComponents, newComponentsByRef) {
 	return schemaForAlternatives(alternatives, existingComponents, newComponentsByRef, mode);
 }
 
-function schemaForAlternatives (alternatives, existingComponents, newComponentsByRef, mode) {
+function schemaForAlternatives (alternatives, existingComponents, newComponentsByRef, mode, discriminator) {
 	let swaggers = [];
 	for (const joiSchema of alternatives) {
 		const { swagger, components } = parse(joiSchema, merge({}, existingComponents || {}, newComponentsByRef || {}));
@@ -83,7 +83,17 @@ function schemaForAlternatives (alternatives, existingComponents, newComponentsB
 	}
 	swaggers = uniqWith(swaggers, isEqual);
 
-	return swaggers.length > 0 ? { [mode]: swaggers } : {};
+	const result = swaggers.length > 0 ? { [mode]: swaggers } : {};
+    
+    // Add discriminator if provided
+    if (discriminator) {
+        result.discriminator = {
+            propertyName: discriminator.propertyName,
+            mapping: discriminator.mapping
+        };
+    }
+
+	return result;
 }
 
 function parseValidsAndInvalids (schema, filterFunc) {
@@ -206,27 +216,28 @@ const parseAsType = {
 	},
 	boolean: (/* schema */) => ({ type: 'boolean' }),
 	alternatives: (schema, existingComponents, newComponentsByRef) => {
-		const matches = get(schema, '$_terms.matches');
-		const mode = `${get(schema, '_flags.match') || 'any'}Of`;
+        const matches = get(schema, '$_terms.matches');
+        const mode = `${get(schema, '_flags.match') || 'any'}Of`;
+        const discriminator = meta(schema, 'discriminator');
 
-		const alternatives = [];
-		for (const m of matches) {
-			if (m.ref) {
-				if (m.then) alternatives.push(m.then);
-				if (m.otherwise) alternatives.push(m.otherwise);
-				if (m.switch) {
-					for (const s of m.switch) {
-						if (s.then) alternatives.push(s.then);
-						if (s.otherwise) alternatives.push(s.otherwise);
-					}
-				}
-			} else {
-				alternatives.push(m.schema);
-			}
-		}
+        const alternatives = [];
+        for (const m of matches) {
+            if (m.ref) {
+                if (m.then) alternatives.push(m.then);
+                if (m.otherwise) alternatives.push(m.otherwise);
+                if (m.switch) {
+                    for (const s of m.switch) {
+                        if (s.then) alternatives.push(s.then);
+                        if (s.otherwise) alternatives.push(s.otherwise);
+                    }
+                }
+            } else {
+                alternatives.push(m.schema);
+            }
+        }
 
-		return schemaForAlternatives(alternatives, existingComponents, newComponentsByRef, mode);
-	},
+        return schemaForAlternatives(alternatives, existingComponents, newComponentsByRef, mode, discriminator);
+    },
 	array: (schema, existingComponents, newComponentsByRef) => {
 		const items = get(schema, '$_terms.items');
 		const mode = 'oneOf';
