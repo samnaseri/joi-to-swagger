@@ -87,9 +87,22 @@ function schemaForAlternatives (alternatives, existingComponents, newComponentsB
     
     // Add discriminator if provided
     if (discriminator) {
+        // Convert mapping values to JSON pointer references if they aren't already
+        const mappingWithRefs = {};
+        if (discriminator.mapping) {
+            for (const [key, value] of Object.entries(discriminator.mapping)) {
+                // If the value doesn't start with '#/', convert it to a JSON pointer reference
+                if (typeof value === 'string' && !value.startsWith('#/')) {
+                    mappingWithRefs[key] = `#/components/schemas/${value}`;
+                } else {
+                    mappingWithRefs[key] = value;
+                }
+            }
+        }
+        
         result.discriminator = {
             propertyName: discriminator.propertyName,
-            mapping: discriminator.mapping
+            mapping: mappingWithRefs
         };
     }
 
